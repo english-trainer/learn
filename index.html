@@ -1,0 +1,352 @@
+
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тренажер английских слов</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #000000;
+            color: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: #000000;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 450px;
+            text-align: center;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        h1 {
+            color: #4CAF50;
+            margin-bottom: 20px;
+        }
+        input[type="text"], input[type="number"] {
+            width: 80%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #ffffff;
+            border-radius: 6px;
+            font-size: 16px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .secondary-btn {
+            background-color: #FFFAFA;
+        }
+        .secondary-btn:hover {
+            background-color: #ffffff;
+        }
+        .hidden {
+            display: none !important;
+        }
+        #feedback {
+            font-weight: bold;
+            margin-top: 15px;
+            min-height: 24px;
+        }
+        .stats {
+            font-size: 14px;
+            color: #777;
+            margin-top: 10px;
+        }
+        .review-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            text-align: left;
+        }
+        .review-item strong {
+            width: 40%;
+            word-wrap: break-word;
+        }
+        .review-item input {
+            width: 55%;
+            margin: 0;
+            padding: 8px;
+        }
+        .button-group {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Тренажер Слов</h1>
+
+    <!-- Выбор количества слов -->
+    <div id="step-count">
+        <p>Сколько английских слов вы хотите выучить?</p>
+        <input type="number" id="word-count" min="1" value="5">
+        <br>
+        <button onclick="startInput()">Начать ввод</button>
+    </div>
+
+    <!-- Ввод английских слов -->
+    <div id="step-input" class="hidden">
+        <p>Введите слово на английском (<span id="current-word-index">1</span> из <span id="total-words"></span>):</p>
+        <input type="text" id="eng-word" placeholder="Например: apple" onkeypress="handleEnter(event, nextInputWord)">
+        <br>
+        <button onclick="nextInputWord()">Добавить</button>
+    </div>
+
+    <!-- Ожидание перевода -->
+    <div id="step-translating" class="hidden">
+        <p>⏳ Ищем перевод...</p>
+    </div>
+
+    <!-- Проверка и ручной ввод перевода -->
+    <div id="step-review" class="hidden">
+        <h2 style="font-size: 20px;">Проверка переводов</h2>
+        <p style="font-size: 14px; color: #ffffff;">Отредактируйте автоматический перевод:</p>
+        <div id="review-list"></div>
+        <div class="button-group">
+            <button onclick="goBackToStart()" class="secondary-btn">Назад (сбросить)</button>
+            <button onclick="saveReviewAndStart()">Начать тренировку</button>
+        </div>
+    </div>
+
+    <!-- Практика -->
+    <div id="step-practice" class="hidden">
+        <p class="stats">Слово <span id="practice-progress"></span></p>
+        <p>Как переводится это слово?</p>
+        <h2 id="ru-word-display" style="color: #2c3e50; font-size: 28px;"></h2>
+        <input type="text" id="eng-guess" placeholder="Введите на английском" onkeypress="handleEnter(event, checkGuess)" autocomplete="off">
+        <br>
+        <button onclick="checkGuess()">Проверить</button>
+        <p id="feedback"></p>
+        <p class="stats">Попытка: <span id="attempt-num">1</span> из 2</p>
+    </div>
+
+    <!-- Результаты -->
+    <div id="step-result" class="hidden">
+        <h2>Тренировка завершена! 🎉</h2>
+        <p style="font-size: 18px;">Ваш итоговый балл:</p>
+        <h1 style="font-size: 48px; margin: 10px 0;"><span id="score"></span> / <span id="max-score"></span></h1>
+        <div class="button-group" style="flex-direction: column; align-items: center;">
+            <button onclick="startPractice()">Пройти еще раз с этими же словами</button>
+            <button onclick="location.reload()" class="secondary-btn">Начать с новыми словами</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let targetCount = 0;
+    let words = []; 
+    let practiceWords = [];
+    let currentPracticeIndex = 0;
+    let currentAttempts = 0;
+    let score = 0;
+
+    function showScreen(id) {
+        const screens = ['step-count', 'step-input', 'step-translating', 'step-review', 'step-practice', 'step-result'];
+        screens.forEach(sid => document.getElementById(sid).classList.add('hidden'));
+        document.getElementById(id).classList.remove('hidden');
+    }
+
+    function handleEnter(e, callback) {
+        if (e.key === 'Enter') callback();
+    }
+
+    // --- ЭТАП ВВОДА ---
+    function startInput() {
+        targetCount = parseInt(document.getElementById('word-count').value);
+        if (targetCount > 0) {
+            document.getElementById('total-words').innerText = targetCount;
+            showScreen('step-input');
+            document.getElementById('eng-word').focus();
+        } else {
+            alert('Введите корректное число слов!');
+        }
+    }
+
+    function nextInputWord() {
+        const inputField = document.getElementById('eng-word');
+        const word = inputField.value.trim();
+        if (word) {
+            words.push({ eng: word, ru: '' });
+            inputField.value = '';
+
+            if (words.length < targetCount) {
+                document.getElementById('current-word-index').innerText = words.length + 1;
+                inputField.focus();
+            } else {
+                translateWords();
+            }
+        }
+    }
+
+    // --- ЭТАП ПЕРЕВОДА ---
+    async function translateWords() {
+        showScreen('step-translating');
+
+        for (let i = 0; i < words.length; i++) {
+            try {
+                let response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(words[i].eng)}&langpair=en|ru`);
+                let data = await response.json();
+
+                if (data && data.responseData && data.responseData.translatedText && !data.responseData.translatedText.includes('MYMEMORY WARNING')) {
+                    words[i].ru = data.responseData.translatedText;
+                }
+            } catch (error) {
+                console.error('Ошибка перевода:', error);
+            }
+        }
+
+        showReviewScreen();
+    }
+
+    // --- ЭТАП ПРОВЕРКИ И РУЧНОГО ВВОДА ---
+    function showReviewScreen() {
+        showScreen('step-review');
+        const listContainer = document.getElementById('review-list');
+        listContainer.innerHTML = '';
+
+        words.forEach((word, index) => {
+            listContainer.innerHTML += `
+                <div class="review-item">
+                    <strong>${word.eng}</strong>
+                    <input type="text" id="review-${index}" value="${word.ru}" placeholder="Ваш перевод">
+                </div>
+            `;
+        });
+    }
+
+    function goBackToStart() {
+        // Сбрасываем слова и возвращаемся к начальному экрану
+        words = [];
+        document.getElementById('current-word-index').innerText = 1;
+        document.getElementById('eng-word').value = '';
+        showScreen('step-count');
+    }
+
+    function saveReviewAndStart() {
+        let allFilled = true;
+
+        for (let i = 0; i < words.length; i++) {
+            const inputField = document.getElementById(`review-${i}`);
+            const val = inputField.value.trim();
+
+            if (!val) {
+                inputField.style.border = '1px solid #e74c3c';
+                allFilled = false;
+            } else {
+                inputField.style.border = '1px solid #ccc';
+                words[i].ru = val;
+            }
+        }
+
+        if (allFilled) {
+            startPractice();
+        } else {
+            alert('Пожалуйста, заполните пустые поля с переводами!');
+        }
+    }
+
+    // --- ЭТАП ПРАКТИКИ ---
+    function startPractice() {
+        // Перемешиваем слова перед каждой тренировкой
+        practiceWords = [...words].sort(() => Math.random() - 0.5);
+        currentPracticeIndex = 0;
+        score = 0;
+        showScreen('step-practice');
+        setupPracticeWord();
+    }
+
+    function setupPracticeWord() {
+        currentAttempts = 0;
+        document.getElementById('practice-progress').innerText = `${currentPracticeIndex + 1} / ${practiceWords.length}`;
+        document.getElementById('attempt-num').innerText = '1';
+
+        const guessInput = document.getElementById('eng-guess');
+        guessInput.value = '';
+        guessInput.disabled = false;
+        guessInput.focus();
+
+        document.getElementById('ru-word-display').innerText = practiceWords[currentPracticeIndex].ru;
+        document.getElementById('feedback').innerText = '';
+    }
+
+    function checkGuess() {
+        const guessInput = document.getElementById('eng-guess');
+        if (guessInput.disabled) return;
+
+        const guess = guessInput.value.trim().toLowerCase();
+        const correct = practiceWords[currentPracticeIndex].eng.toLowerCase();
+        const feedback = document.getElementById('feedback');
+
+        if (guess === correct) {
+            if (currentAttempts === 0) {
+                score++;
+            } else {
+                score += 1; 
+            }
+            feedback.innerText = '✅ Правильно!';
+            feedback.style.color = '#27ae60';
+            guessInput.disabled = true;
+            setTimeout(nextPracticeWord, 1000);
+        } else {
+            currentAttempts++;
+            if (currentAttempts >= 2) {
+                feedback.innerText = `❌ Неправильно! Верный ответ: ${correct}`;
+                feedback.style.color = '#e74c3c';
+                guessInput.disabled = true;
+                setTimeout(nextPracticeWord, 2000);
+            } else {
+                feedback.innerText = '⚠️ Неправильно. Попробуйте еще раз!';
+                feedback.style.color = '#f39c12';
+                document.getElementById('attempt-num').innerText = '2';
+                guessInput.value = '';
+                guessInput.focus();
+            }
+        }
+    }
+
+    function nextPracticeWord() {
+        currentPracticeIndex++;
+        if (currentPracticeIndex < practiceWords.length) {
+            setupPracticeWord();
+        } else {
+            showResults();
+        }
+    }
+
+    // --- ЭТАП РЕЗУЛЬТАТОВ ---
+    function showResults() {
+        document.getElementById('score').innerText = score;
+        document.getElementById('max-score').innerText = practiceWords.length;
+        showScreen('step-result');
+    }
+</script>
+
+</body>
+</html>
